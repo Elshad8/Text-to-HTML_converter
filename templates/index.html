@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email Template Generator</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link href="https://unpkg.com/grapesjs/dist/css/grapes.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+
+    <style>
+        body {
+            display: flex;
+            flex-direction: row;
+            height: 100vh;
+            margin: 0;
+            padding: 0;
+            z-index: 0;
+        }
+
+        .sidebar {
+            width: 250px;
+            padding: 20px;
+            border-right: 1px solid #ddd;
+            background-color: #f8f9fa;
+            overflow-y: auto;
+        }
+
+        .container {
+            flex: 1;
+            padding: 20px;
+            background-color: rgba(255, 255, 255, 0);
+            z-index: 1;
+        }
+
+        #editor {
+            height: 100%;
+            width: 100%;
+            border: 1px solid #ddd;
+        }
+
+        #result {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="sidebar">
+        <h2>Modify Template</h2>
+        <div id="blocks"></div>
+    </div>
+    <div class="container">
+        <h1>Email Template Generator</h1>
+        <form id="template-form">
+            <div class="form-group">
+                <label for="instruction">Enter your instruction here:</label>
+                <textarea class="form-control" id="instruction" rows="3"></textarea>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="addImage">
+                    <label class="form-check-label" for="addImage">
+                        Initialize with background image
+                    </label>
+                    <button type="button" id="regenerate-image" class="btn btn-info">Re-generate/ Add Background Image</button>
+
+                </div>
+            </div>
+            <button type="submit" class="btn btn-primary">Submit</button>
+            <button type="button" class="btn btn-secondary" id="reset-template">Reset Template</button>
+            <button type="button" class="btn btn-secondary" id="undo">Undo</button>
+        </form>
+
+        <form id="image-form" style="margin-top: 20px;">
+            <div class="form-group">
+                <label for="image-input">Upload Image:</label>
+                <input type="file" id="image-input" accept="image/*" class="form-control">
+                <button type="button" onclick="submitImage()" class="btn btn-success">Generate HTML from Image</button>
+            </div>
+        </form>
+        <div id="html-output"></div>
+        <div id="editor"></div>
+    </div>
+
+    <script src="https://unpkg.com/grapesjs"></script>
+    <script>
+        var editor;
+
+        document.addEventListener('DOMContentLoaded', function () {
+            editor = grapesjs.init({
+                container: '#editor',
+                height: '100%',
+                fromElement: true,
+                storageManager: false,
+                // Ensure full width usage
+                canvas: {
+                    styles: [
+                        'https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css',
+                        'https://unpkg.com/grapesjs/dist/css/grapes.min.css'
+                    ],
+                    scripts: [
+                        'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/js/all.min.js'
+                    ]
+                }
+            });
+
+            function setFullWidthHtml(htmlContent) {
+                // Setting the HTML content and ensuring it takes full width
+                editor.setComponents(`<div style="width: 100%; height: 100%;">${htmlContent}</div>`);
+            }
+
+            document.getElementById('template-form').addEventListener('submit', async function (event) {
+                event.preventDefault();
+                const instruction = document.getElementById('instruction').value;
+                const addImage = document.getElementById('addImage').checked;
+                const response = await fetch('/generate-html', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ instruction, addImage })
+                });
+                const result = await response.json();
+                setFullWidthHtml(result.html);
+            });
+
+            
+
+            document.getElementById('reset-template').addEventListener('click', function () {
+                editor.setComponents('');
+                document.getElementById('instruction').value = '';
+                document.getElementById('change-instruction').value = '';
+            });
+
+            document.getElementById('undo').addEventListener('click', function () {
+                fetch('/undo', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
+                })
+                    .then(response => response.json())
+                    .then(result => {
+                        editor.setComponents(result.html);
+                    });
+            });
+
+            document.getElementById('regenerate-image').addEventListener('click', function () {
+                const instruction = document.getElementById('instruction').value;
+                if (!instruction) {
+                    alert('Please enter an instruction and generate a template first.');
+                    return;
+                }
+                const addImage = true; // Assume background image needs to be added
+                fetch('/regenerate-image', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ instruction, addImage })
+                })
+                    .then(response => response.json())
+                    .then(result => {
+                        editor.setComponents(result.html);
+                    });
+            });
+
+
+        });
+
+        function submitImage() {
+            const file = document.getElementById('image-input').files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function () {
+                    const base64Image = reader.result.split(',')[1];
+                    fetch('/image-to-html', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ image: base64Image })
+                    })
+                        .then(response => response.json())
+                        .then(result => {
+                            editor.setComponents(result.html);
+                        });
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+    </script>
+</body>
+
+</html>
