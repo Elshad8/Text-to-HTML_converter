@@ -1,1 +1,1 @@
-# email-template-app
+# Template Generator App
